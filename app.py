@@ -2,6 +2,7 @@ import pandas as pd
 from dash import Dash, dcc, html
 import plotly.express as px
 import json
+import os
 
 # ---------- CARGA DE DATOS ----------
 ruta_nofetal = "data/Anexo1.NoFetal2019_CE_15-03-23.xlsx"
@@ -142,44 +143,42 @@ app.layout = html.Div(
         html.H4("Estudiante: Sergio Andrés Rojas Ordoñez",
                 style={"textAlign": "center", "marginBottom": "30px"}),
 
-        # 1. MAPA
-        html.H2("1. **Mapa: Distribución total de muertes por departamento (2019)**",
+        # 1. MAPA (Se eliminaron los asteriscos internos de los encabezados)
+        html.H2("1. Mapa: Distribución total de muertes por departamento (2019)",
                 style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_mapa_geo),
 
         # 2. LÍNEAS
-        html.H2("2. **Gráfico de líneas: Total de muertes por mes (2019)**",
+        html.H2("2. Gráfico de líneas: Total de muertes por mes (2019)",
                 style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_lineas),
 
         # 3. VIOLENCIA
-        html.H2("3. **Gráfico de barras: 5 ciudades más violentas (Homicidios)**",
+        html.H2("3. Gráfico de barras: 5 ciudades más violentas (Homicidios)",
                 style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_violencia),
 
         # 4. CIRCULAR
-        html.H2("4. **Gráfico circular: 10 ciudades con menor mortalidad (2019)**",
+        html.H2("4. Gráfico circular: 10 ciudades con menor mortalidad (2019)",
                 style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_menor_mortalidad),
 
         # 5. TABLA DE CAUSAS
-        html.H2("5. **Tabla: Principales 10 causas de muerte en Colombia (2019)**",
+        html.H2("5. Tabla: Principales 10 causas de muerte en Colombia (2019)",
                 style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_causas),
 
         # 6. SEXO
-        html.H2("6. **Gráfico de barras apiladas: Muertes por sexo y departamento**",
+        html.H2("6. Gráfico de barras apiladas: Muertes por sexo y departamento",
                 style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_sexo),
 
         # 7. HISTOGRAMA
-        html.H2("7. **Histograma: Distribución de muertes por grupos de edad (GRUPO_EDAD1)**",
+        html.H2("7. Histograma: Distribución de muertes por grupos de edad (GRUPO_EDAD1)",
                 style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_edades),
     ]
 )
-
-import os
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
