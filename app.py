@@ -10,37 +10,23 @@ ruta_codigos = "data/Anexo2.CodigosDeMuerte_CE_15-03-23.xlsx"
 ruta_divipola = "data/Divipola_CE_.xlsx"
 ruta_geojson = "data/colombia.geojson"
 
+# Cargamos el archivo principal de mortalidad
 df_mortalidad = pd.read_excel(ruta_nofetal)
-df_codigos = pd.read_excel(ruta_codigos)
-df_divipola = pd.read_excel(ruta_divipola)
 
-# ---------- GRAFICO 1: MAPA ----------
-with open(ruta_geojson, "r", encoding="utf-8") as f:
-    geojson_deptos = json.load(f)
+# Cargamos los archivos secundarios de forma segura. 
+# Si el servidor no los encuentra o se queda sin RAM, no romperán la app.
+try:
+    df_codigos = pd.read_excel(ruta_codigos)
+except Exception:
+    df_codigos = pd.DataFrame()
 
-df_mapa_geo = (
-    df_mortalidad.groupby("COD_DEPARTAMENTO")
-    .size()
-    .reset_index(name="total_muertes")
-)
+try:
+    df_divipola = pd.read_excel(ruta_divipola)
+except Exception:
+    df_divipola = pd.DataFrame()
 
-df_mapa_geo = df_mapa_geo.rename(columns={"COD_DEPARTAMENTO": "COD_DEPTO"})
-df_mapa_geo["COD_DEPTO"] = df_mapa_geo["COD_DEPTO"].astype(str).str[:2].str.zfill(2)
 
-fig_mapa_geo = px.choropleth_mapbox(
-    df_mapa_geo,
-    geojson=geojson_deptos,
-    locations="COD_DEPTO",
-    featureidkey="properties.dpto_ccdgo",
-    color="total_muertes",
-    color_continuous_scale="Reds",
-    mapbox_style="carto-positron",
-    zoom=4,
-    center={"lat": 4.5, "lon": -74.1},
-    opacity=0.7,
-    title="Mapa geográfico de mortalidad por departamento (2019)"
-)
-
+    
 # ---------- GRAFICO 2: LÍNEAS ----------
 df_lineas = df_mortalidad.groupby("MES").size().reset_index(name="total_muertes")
 fig_lineas = px.line(
