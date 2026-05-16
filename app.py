@@ -1,9 +1,7 @@
 import pandas as pd
 from dash import Dash, dcc, html
 import plotly.express as px
-import json
 import os
-import urllib.request
 
 # ---------- CARGA DE DATOS ----------
 ruta_nofetal = "data/Anexo1.NoFetal2019_CE_15-03-23.xlsx"
@@ -13,7 +11,7 @@ ruta_divipola = "data/Divipola_CE_.xlsx"
 # Cargamos el archivo principal de mortalidad
 df_mortalidad = pd.read_excel(ruta_nofetal)
 
-# Cargamos los archivos secundarios de forma segura
+# Archivos secundarios limpios con try/except
 try:
     df_codigos = pd.read_excel(ruta_codigos)
 except Exception:
@@ -24,44 +22,74 @@ try:
 except Exception:
     df_divipola = pd.DataFrame()
 
-# ---------- GEOJSON DESDE URL ----------
-try:
-    url_geo = "https://raw.githubusercontent.com/marcovega/colombia-json/master/colombia.json"
-    with urllib.request.urlopen(url_geo) as response:
-        colombia_geo = json.loads(response.read().decode("utf-8"))
-except Exception:
-    colombia_geo = None
+# ---------- DICCIONARIO SEGURO DE COORDENADAS POR DEPARTAMENTO ----------
+# Mapeo directo usando el COD_DEPARTAMENTO numérico exacto que viene en tu Anexo1
+coordenadas_colombia = {
+    11: {"lat": 4.6097, "lon": -74.0817, "nombre": "Bogotá D.C."},
+    5:  {"lat": 6.2442, "lon": -75.5812, "nombre": "Antioquia"},
+    76: {"lat": 3.4516, "lon": -76.5320, "nombre": "Valle del Cauca"},
+    8:  {"lat": 10.9685, "lon": -74.7813, "nombre": "Atlántico"},
+    13: {"lat": 10.3910, "lon": -75.4794, "nombre": "Bolívar"},
+    15: {"lat": 5.5353, "lon": -73.3678, "nombre": "Boyacá"},
+    17: {"lat": 5.0689, "lon": -75.5174, "nombre": "Caldas"},
+    18: {"lat": 1.6144, "lon": -75.6062, "nombre": "Caquetá"},
+    19: {"lat": 2.4419, "lon": -76.6063, "nombre": "Cauca"},
+    20: {"lat": 10.4631, "lon": -73.2532, "nombre": "Cesar"},
+    23: {"lat": 8.7479, "lon": -75.8814, "nombre": "Córdoba"},
+    25: {"lat": 4.7110, "lon": -74.2400, "nombre": "Cundinamarca"},
+    27: {"lat": 5.6923, "lon": -76.6582, "nombre": "Chocó"},
+    41: {"lat": 2.9273, "lon": -75.2819, "nombre": "Huila"},
+    44: {"lat": 11.5444, "lon": -72.9069, "nombre": "La Guajira"},
+    47: {"lat": 11.2404, "lon": -74.1990, "nombre": "Magdalena"},
+    50: {"lat": 4.1420, "lon": -73.6266, "nombre": "Meta"},
+    52: {"lat": 1.2136, "lon": -77.2811, "nombre": "Nariño"},
+    54: {"lat": 7.8939, "lon": -72.5078, "nombre": "Norte de Santander"},
+    63: {"lat": 4.5339, "lon": -75.6811, "nombre": "Quindío"},
+    66: {"lat": 4.8133, "lon": -75.6961, "nombre": "Risaralda"},
+    68: {"lat": 7.1254, "lon": -73.1198, "nombre": "Santander"},
+    70: {"lat": 9.3047, "lon": -75.3978, "nombre": "Sucre"},
+    73: {"lat": 4.4389, "lon": -75.2322, "nombre": "Tolima"},
+    81: {"lat": 7.0840, "lon": -70.7451, "nombre": "Arauca"},
+    85: {"lat": 5.3378, "lon": -72.3959, "nombre": "Casanare"},
+    86: {"lat": 1.1494, "lon": -76.6461, "nombre": "Putumayo"},
+    88: {"lat": 12.5833, "lon": -81.7000, "nombre": "San Andrés y Providencia"},
+    91: {"lat": -4.2153, "lon": -69.9441, "nombre": "Amazonas"},
+    94: {"lat": 3.8653, "lon": -67.9239, "nombre": "Guainía"},
+    95: {"lat": 2.5744, "lon": -72.6425, "nombre": "Guaviare"},
+    97: {"lat": 1.1984, "lon": -70.1733, "nombre": "Vaupés"},
+    99: {"lat": 6.1857, "lon": -67.4856, "nombre": "Vichada"}
+}
 
-# ---------- GRAFICO 1: MAPA ----------
+# ---------- GRAFICO 1: MAPA DE DENSIDAD (SCATTER MAPBOX) ----------
 df_mapa = df_mortalidad.groupby("COD_DEPARTAMENTO").size().reset_index(name="total_muertes")
 
-# SOLUCIÓN CRUCIAL: Convertimos a número, luego a entero y finalmente a string SIN ceros a la izquierda (ej: 5 -> "5", 11 -> "11")
-# Esto es porque el GeoJSON de marcovega no usa formato de dos dígitos para los IDs de departamentos.
-df_mapa["COD_DEPARTAMENTO"] = pd.to_numeric(df_mapa["COD_DEPARTAMENTO"], errors="coerce").fillna(0).astype(int)
-df_mapa["COD_DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].astype(str)
+# Limpieza numérica estándar
+df_mapa["COD_DEPARTAMENTO"] = pd.to_numeric(df_mapa["COD_DEPARTAMENTO"], errors='coerce').fillna(0).astype(int)
 
-if colombia_geo:
-    fig_mapa_geo = px.choropleth_mapbox(
-        df_mapa,
-        geojson=colombia_geo,
-        locations="COD_DEPARTAMENTO",
-        featureidkey="properties.DPTO",  # Llave correcta en mayúsculas de este archivo JSON
-        color="total_muertes",
-        color_continuous_scale="Reds",    # Escala de rojos para la intensidad
-        mapbox_style="open-street-map",
-        zoom=4.2,
-        center={"lat": 4.570868, "lon": -74.297333},
-        opacity=0.7,
-        title="Distribución total de muertes por departamento (2019)",
-    )
-    fig_mapa_geo.update_layout(margin={"r": 0, "t": 40, "l": 0, "b": 0})
-else:
-    fig_mapa_geo = px.bar(
-        df_mapa,
-        x="COD_DEPARTAMENTO",
-        y="total_muertes",
-        title="Distribución total de muertes (Respaldo sin GeoJSON)",
-    )
+# Cruzamos las coordenadas usando el diccionario
+df_mapa["lat"] = df_mapa["COD_DEPARTAMENTO"].map(lambda x: coordenadas_colombia.get(x, {}).get("lat", None))
+df_mapa["lon"] = df_mapa["COD_DEPARTAMENTO"].map(lambda x: coordenadas_colombia.get(x, {}).get("lon", None))
+df_mapa["DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].map(lambda x: coordenadas_colombia.get(x, {}).get("nombre", "Desconocido"))
+
+# Quitamos filas que no tengan coordenadas válidas
+df_mapa = df_mapa.dropna(subset=["lat", "lon"])
+
+# Generamos el mapa interactivo de burbujas rojas
+fig_mapa_geo = px.scatter_mapbox(
+    df_mapa,
+    lat="lat",
+    lon="lon",
+    size="total_muertes",           # El tamaño del círculo muestra el volumen de muertes
+    color="total_muertes",          # El color cambia de intensidad
+    color_continuous_scale="Reds",  # Gama de rojos como solicitas
+    hover_name="DEPARTAMENTO",
+    hover_data={"total_muertes": True, "lat": False, "lon": False},
+    mapbox_style="open-street-map",
+    zoom=4.4,
+    center={"lat": 4.570868, "lon": -74.297333},
+    title="Distribución Geográfica de la Mortalidad en Colombia (2019)"
+)
+fig_mapa_geo.update_layout(margin={"r":0,"t":40,"l":0,"b":0})
 
 # ---------- GRAFICO 2: LÍNEAS ----------
 df_lineas = df_mortalidad.groupby("MES").size().reset_index(name="total_muertes")
