@@ -2,13 +2,27 @@ import pandas as pd
 from dash import Dash, dcc, html
 import plotly.express as px
 import os
+import zipfile
+
+# ---------- DESCOMPRESIÓN AUTOMÁTICA EN PRODUCCIÓN ----------
+ruta_zip = "data/data.zip"
+directorio_extraccion = "data_extraida"
+
+# Si existe el archivo ZIP, lo extraemos automáticamente en el servidor
+if os.path.exists(ruta_zip):
+    with zipfile.ZipFile(ruta_zip, 'r') as zip_ref:
+        zip_ref.extractall(directorio_extraccion)
+    # Reasignamos las rutas hacia la carpeta donde se extrajeron los archivos
+    ruta_nofetal = os.path.join(directorio_extraccion, "Anexo1.NoFetal2019_CE_15-03-23.xlsx")
+    ruta_codigos = os.path.join(directorio_extraccion, "Anexo2.CodigosDeMuerte_CE_15-03-23.xlsx")
+    ruta_divipola = os.path.join(directorio_extraccion, "Divipola_CE_.xlsx")
+else:
+    # Rutas de respaldo locales si no se usa el ZIP
+    ruta_nofetal = "data/Anexo1.NoFetal2019_CE_15-03-23.xlsx"
+    ruta_codigos = "data/Anexo2.CodigosDeMuerte_CE_15-03-23.xlsx"
+    ruta_divipola = "data/Divipola_CE_.xlsx"
 
 # ---------- CARGA DE DATOS ----------
-ruta_nofetal = "data/Anexo1.NoFetal2019_CE_15-03-23.xlsx"
-ruta_codigos = "data/Anexo2.CodigosDeMuerte_CE_15-03-23.xlsx"
-ruta_divipola = "data/Divipola_CE_.xlsx"
-
-# Cargamos el archivo principal de mortalidad
 df_mortalidad = pd.read_excel(ruta_nofetal)
 
 # Archivos secundarios limpios con try/except
@@ -22,10 +36,9 @@ except Exception:
 try:
     df_divipola = pd.read_excel(ruta_divipola)
     if not df_divipola.empty:
-        # Forzamos los nombres de las columnas a mayúsculas para buscar
+        # Forzamos los nombres de las columnas a mayúsculas para buscar de forma flexible
         df_divipola.columns = [str(c).upper().strip() for c in df_divipola.columns]
         
-        # Buscamos de forma ultra-flexible las columnas
         col_cod = [c for c in df_divipola.columns if "COD" in c or "MUN" in c]
         col_nom = [c for c in df_divipola.columns if "NOM" in c or "MUN" in c or "TEXT" in c]
         
@@ -35,8 +48,8 @@ try:
 except Exception:
     df_divipola = pd.DataFrame()
 
-# ---------- DICCIONARIO DE RESPALDO ULTRA-SEGURO (Mapeo Directo) ----------
-# Si el Excel de Divipola falla, este diccionario traduce directamente los códigos de tus capturas
+# ---------- DICCIONARIO DE RESPALDO ULTRA-SEGURO ----------
+# Este mapeo directo garantiza que los nombres se muestren de forma infalible en producción
 diccionario_municipios = {
     76001: "CALI", 11001: "BOGOTÁ D.C.", 5001: "MEDELLÍN", 
     8001: "BARRANQUILLA", 54001: "CÚCUTA",
@@ -82,7 +95,7 @@ coordenadas_colombia = {
     99: {"lat": 6.1857, "lon": -67.4856, "nombre": "Vichada"}
 }
 
-# Reconstrucción matemática exacta del código de 5 dígitos (DPTO * 1000 + MUN)
+# Reconstrucción del código de municipio integrado (DPTO * 1000 + MUN)
 df_mortalidad["INT_DPTO"] = pd.to_numeric(df_mortalidad["COD_DEPARTAMENTO"], errors='coerce').fillna(0).astype(int)
 df_mortalidad["INT_MUN"] = pd.to_numeric(df_mortalidad["COD_MUNICIPIO"], errors='coerce').fillna(0).astype(int)
 df_mortalidad["KEY_MUNICIPIO"] = (df_mortalidad["INT_DPTO"] * 1000) + df_mortalidad["INT_MUN"]
@@ -112,14 +125,12 @@ fig_lineas = px.line(df_lineas, x="MES", y="total_muertes", markers=True, title=
 df_homicidios = df_mortalidad[df_mortalidad["MANERA_MUERTE"] == "Homicidio"]
 df_violencia = df_homicidios.groupby("KEY_MUNICIPIO").size().reset_index(name="total_homicidios")
 
-# Intentar cruce con DIVIPOLA; si falla, usar el diccionario de respaldo seguro
 if not df_divipola.empty and "NOM_MUNICIPIO" in df_divipola.columns:
     df_violencia = pd.merge(df_violencia, df_divipola[["KEY_MUNICIPIO", "NOM_MUNICIPIO"]].drop_duplicates(subset=["KEY_MUNICIPIO"]), on="KEY_MUNICIPIO", how="left")
     df_violencia["MUNICIPIO"] = df_violencia["NOM_MUNICIPIO"].fillna(df_violencia["KEY_MUNICIPIO"].map(diccionario_municipios))
 else:
     df_violencia["MUNICIPIO"] = df_violencia["KEY_MUNICIPIO"].map(diccionario_municipios)
 
-# Si algún código raro queda vacío, muestra el código
 df_violencia["MUNICIPIO"] = df_violencia["MUNICIPIO"].fillna(df_violencia["KEY_MUNICIPIO"].astype(str))
 df_violencia = df_violencia.sort_values("total_homicidios", ascending=False).head(5)
 
@@ -171,7 +182,7 @@ fig_sexo = px.bar(
 df_edades = df_mortalidad.groupby("GRUPO_EDAD1").size().reset_index(name="total_muertes").sort_values("GRUPO_EDAD1")
 fig_edades = px.bar(df_edades, x="GRUPO_EDAD1", y="total_muertes", title="Distribución de muertes por grupos de edad (2019)")
 
-# ---------- APP ----------
+# ---------- APP INTERFAZ ----------
 app = Dash(__name__)
 server = app.server
 
@@ -206,5 +217,6 @@ app.layout = html.Div(
 )
 
 if __name__ == "__main__":
+    # Configuración obligatoria para el despliegue en la nube
     port = int(os.environ.get("PORT", 8050))
-    app.run(host="127.0.0.1", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)
