@@ -34,7 +34,8 @@ except Exception:
 # ---------- GRAFICO 1: MAPA ----------
 df_mapa = df_mortalidad.groupby("COD_DEPARTAMENTO").size().reset_index(name="total_muertes")
 
-# Convertimos el código a string y rellenamos con ceros a la izquierda por si acaso (ej: '5' -> '05')
+# SOLUCIÓN CRUCIAL: Convertimos a número, luego a entero y finalmente a texto con dos dígitos (ej: 5 -> "05")
+df_mapa["COD_DEPARTAMENTO"] = pd.to_numeric(df_mapa["COD_DEPARTAMENTO"], errors='coerce').fillna(0).astype(int)
 df_mapa["COD_DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].astype(str).str.zfill(2)
 
 if colombia_geo:
@@ -42,17 +43,17 @@ if colombia_geo:
         df_mapa,
         geojson=colombia_geo,
         locations="COD_DEPARTAMENTO",
-        featureidkey="properties.DPTO",  # Vincula con el ID del GeoJSON de Colombia
+        featureidkey="properties.DPTO",  # Vincula con el campo DPTO del GeoJSON
         color="total_muertes",
         color_continuous_scale="Viridis",
-        mapbox_style="carto-positron",
-        zoom=3.5,
+        mapbox_style="open-street-map",  # Cambiado para que se vea el mapa real de fondo
+        zoom=4.5,                        # Ajustado el zoom para que se centre mejor en Colombia
         center={"lat": 4.570868, "lon": -74.297333},
-        opacity=0.5,
+        opacity=0.6,
         title="Distribución total de muertes por departamento (2019)"
     )
+    fig_mapa_geo.update_layout(margin={"r":0,"t":40,"l":0,"b":0})
 else:
-    # Si por alguna razón el GeoJSON falla, muestra un gráfico de barras de respaldo para no romper la app
     fig_mapa_geo = px.bar(
         df_mapa, 
         x="COD_DEPARTAMENTO", 
