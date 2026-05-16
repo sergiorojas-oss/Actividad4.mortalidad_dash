@@ -3,17 +3,17 @@ from dash import Dash, dcc, html
 import plotly.express as px
 import json
 import os
+import urllib.request
 
 # ---------- CARGA DE DATOS ----------
 ruta_nofetal = "data/Anexo1.NoFetal2019_CE_15-03-23.xlsx"
 ruta_codigos = "data/Anexo2.CodigosDeMuerte_CE_15-03-23.xlsx"
 ruta_divipola = "data/Divipola_CE_.xlsx"
-ruta_geojson = "data/colombia.geojson"
 
 # Cargamos el archivo principal de mortalidad
 df_mortalidad = pd.read_excel(ruta_nofetal)
 
-# Cargamos los archivos secundarios de forma segura. 
+# Cargamos los archivos secundarios de forma segura para evitar bloqueos
 try:
     df_codigos = pd.read_excel(ruta_codigos)
 except Exception:
@@ -24,17 +24,18 @@ try:
 except Exception:
     df_divipola = pd.DataFrame()
 
-# Carga segura del GeoJSON para el Mapa 1
+# SOLUCIÓN DEFINITIVA: Carga del GeoJSON directo desde URL pública para asegurar el despliegue
 try:
-    with open(ruta_geojson, "r", encoding="utf-8") as f:
-        colombia_geo = json.load(f)
+    url_geo = "https://raw.githubusercontent.com/gmarulanda/co-datasets/master/geojson/departamentos.geojson"
+    with urllib.request.urlopen(url_geo) as response:
+        colombia_geo = json.loads(response.read().decode('utf-8'))
 except Exception:
     colombia_geo = None
 
 # ---------- GRAFICO 1: MAPA ----------
 df_mapa = df_mortalidad.groupby("COD_DEPARTAMENTO").size().reset_index(name="total_muertes")
 
-# SOLUCIÓN CRUCIAL: Convertimos a número, luego a entero y finalmente a texto con dos dígitos (ej: 5 -> "05")
+# Limpieza estricta de códigos: Asegura formato de dos dígitos (ej: 5 -> 5.0 -> 5 -> "05")
 df_mapa["COD_DEPARTAMENTO"] = pd.to_numeric(df_mapa["COD_DEPARTAMENTO"], errors='coerce').fillna(0).astype(int)
 df_mapa["COD_DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].astype(str).str.zfill(2)
 
@@ -43,17 +44,18 @@ if colombia_geo:
         df_mapa,
         geojson=colombia_geo,
         locations="COD_DEPARTAMENTO",
-        featureidkey="properties.DPTO",  # Vincula con el campo DPTO del GeoJSON
+        featureidkey="properties.DPTO",  # Llave correspondiente al GeoJSON público
         color="total_muertes",
-        color_continuous_scale="Viridis",
-        mapbox_style="open-street-map",  # Cambiado para que se vea el mapa real de fondo
-        zoom=4.5,                        # Ajustado el zoom para que se centre mejor en Colombia
+        color_continuous_scale="Reds",    # Color rojo como en tu ejemplo de localhost
+        mapbox_style="open-street-map",  # Carga el mapa de calles real de fondo
+        zoom=4.2,                        # Zoom ideal para centrar Colombia
         center={"lat": 4.570868, "lon": -74.297333},
-        opacity=0.6,
+        opacity=0.7,
         title="Distribución total de muertes por departamento (2019)"
     )
     fig_mapa_geo.update_layout(margin={"r":0,"t":40,"l":0,"b":0})
 else:
+    # Respaldo visual si la red falla
     fig_mapa_geo = px.bar(
         df_mapa, 
         x="COD_DEPARTAMENTO", 
