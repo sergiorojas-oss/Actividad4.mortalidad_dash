@@ -10,8 +10,10 @@ ruta_nofetal = "data/Anexo1.NoFetal2019_CE_15-03-23.xlsx"
 ruta_codigos = "data/Anexo2.CodigosDeMuerte_CE_15-03-23.xlsx"
 ruta_divipola = "data/Divipola_CE_.xlsx"
 
+# Cargamos el archivo principal de mortalidad
 df_mortalidad = pd.read_excel(ruta_nofetal)
 
+# Cargamos los archivos secundarios de forma segura
 try:
     df_codigos = pd.read_excel(ruta_codigos)
 except Exception:
@@ -22,7 +24,7 @@ try:
 except Exception:
     df_divipola = pd.DataFrame()
 
-# ---------- GEOJSON DESDE URL (FUNCIONA EN RAILWAY) ----------
+# ---------- GEOJSON DESDE URL ----------
 try:
     url_geo = "https://raw.githubusercontent.com/marcovega/colombia-json/master/colombia.json"
     with urllib.request.urlopen(url_geo) as response:
@@ -30,25 +32,22 @@ try:
 except Exception:
     colombia_geo = None
 
-# Normalizar códigos del GeoJSON
-if colombia_geo:
-    for f in colombia_geo["features"]:
-        f["properties"]["codigo_dpto"] = str(f["properties"]["codigo_dpto"]).zfill(2)
-
 # ---------- GRAFICO 1: MAPA ----------
 df_mapa = df_mortalidad.groupby("COD_DEPARTAMENTO").size().reset_index(name="total_muertes")
 
+# SOLUCIÓN CRUCIAL: Convertimos a número, luego a entero y finalmente a string SIN ceros a la izquierda (ej: 5 -> "5", 11 -> "11")
+# Esto es porque el GeoJSON de marcovega no usa formato de dos dígitos para los IDs de departamentos.
 df_mapa["COD_DEPARTAMENTO"] = pd.to_numeric(df_mapa["COD_DEPARTAMENTO"], errors="coerce").fillna(0).astype(int)
-df_mapa["COD_DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].astype(str).str.zfill(2)
+df_mapa["COD_DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].astype(str)
 
 if colombia_geo:
     fig_mapa_geo = px.choropleth_mapbox(
         df_mapa,
         geojson=colombia_geo,
         locations="COD_DEPARTAMENTO",
-        featureidkey="properties.codigo_dpto",
+        featureidkey="properties.DPTO",  # Llave correcta en mayúsculas de este archivo JSON
         color="total_muertes",
-        color_continuous_scale="Reds",
+        color_continuous_scale="Reds",    # Escala de rojos para la intensidad
         mapbox_style="open-street-map",
         zoom=4.2,
         center={"lat": 4.570868, "lon": -74.297333},
@@ -169,32 +168,53 @@ app.layout = html.Div(
             style={"textAlign": "center", "marginBottom": "30px"},
         ),
 
-        html.H2("1. Mapa: Distribución total de muertes por departamento (2019)",
-                style={"fontWeight": "bold"}),
+        # 1. MAPA
+        html.H2(
+            "1. Mapa: Distribución total de muertes por departamento (2019)",
+            style={"fontWeight": "bold"},
+        ),
         dcc.Graph(figure=fig_mapa_geo),
 
-        html.H2("2. Gráfico de líneas: Total de muertes por mes (2019)",
-                style={"fontWeight": "bold"}),
+        # 2. LÍNEAS
+        html.H2(
+            "2. Gráfico de líneas: Total de muertes por mes (2019)",
+            style={"fontWeight": "bold"},
+        ),
         dcc.Graph(figure=fig_lineas),
 
-        html.H2("3. Gráfico de barras: 5 ciudades más violentas (Homicidios)",
-                style={"fontWeight": "bold"}),
+        # 3. VIOLENCIA
+        html.H2(
+            "3. Gráfico de barras: 5 ciudades más violentas (Homicidios)",
+            style={"fontWeight": "bold"},
+        ),
         dcc.Graph(figure=fig_violencia),
 
-        html.H2("4. Gráfico circular: 10 ciudades con menor mortalidad (2019)",
-                style={"fontWeight": "bold"}),
+        # 4. CIRCULAR
+        html.H2(
+            "4. Gráfico circular: 10 ciudades con menor mortalidad (2019)",
+            style={"fontWeight": "bold"},
+        ),
         dcc.Graph(figure=fig_menor_mortalidad),
 
-        html.H2("5. Tabla: Principales 10 causas de muerte en Colombia (2019)",
-                style={"fontWeight": "bold"}),
+        # 5. TABLA DE CAUSAS
+        html.H2(
+            "5. Tabla: Principales 10 causas de muerte en Colombia (2019)",
+            style={"fontWeight": "bold"},
+        ),
         dcc.Graph(figure=fig_causas),
 
-        html.H2("6. Gráfico de barras apiladas: Muertes por sexo y departamento",
-                style={"fontWeight": "bold"}),
+        # 6. SEXO
+        html.H2(
+            "6. Gráfico de barras apiladas: Muertes por sexo y departamento",
+            style={"fontWeight": "bold"},
+        ),
         dcc.Graph(figure=fig_sexo),
 
-        html.H2("7. Histograma: Distribución de muertes por grupos de edad (GRUPO_EDAD1)",
-                style={"fontWeight": "bold"}),
+        # 7. HISTOGRAMA
+        html.H2(
+            "7. Histograma: Distribución de muertes por grupos de edad (GRUPO_EDAD1)",
+            style={"fontWeight": "bold"},
+        ),
         dcc.Graph(figure=fig_edades),
     ],
 )
