@@ -81,13 +81,16 @@ Para clonar este repositorio y ejecutar la aplicación de forma local en tu máq
 * **Descripción del Gráfico:** Se presenta un gráfico de barras categórico que ordena y compara el impacto de la mortalidad por causas externas específicas (homicidios) a nivel municipal. El eje horizontal ($X$) identifica los códigos de los municipios evaluados según la clasificación oficial, mientras que el eje vertical ($Y$) cuantifica la frecuencia absoluta del total de homicidios registrados durante el año 2019.
 * **Hallazgos Principales:** El gráfico revela una asimetría crítica y una alta concentración de la violencia urbana en el país. Se destaca de forma contundente el primer nodo municipal (código 0, correspondiente a la capital del país o nodo principal de agregación), el cual despunta exponencialmente al registrar una cifra superior a los 5,000 homicidios en el periodo. En contraste, los demás municipios clasificados en el top muestran cifras significativamente menores que no logran superar la barrera de los 500 casos. Este hallazgo interactivo evidencia la disparidad en las problemáticas de seguridad ciudadana y justifica el uso de herramientas analíticas para focalizar estrategias de intervención social y orden público.
 
-<img width="1877" height="553" alt="image" src="https://github.com/user-attachments/assets/da357b68-89f6-4ce2-9b63-ab9077509cd3" />
+<img width="1876" height="580" alt="image" src="https://github.com/user-attachments/assets/8d5a93f8-758b-4f7b-8402-88dadfc88652" />
+
 
 ### 4. Gráfico circular: 10 ciudades con menor mortalidad (2019)
 
 * **Descripción del Gráfico:** Se presenta un gráfico circular (o de sectores) que distribuye porcentualmente la participación de los 10 municipios con menor registro absoluto de decesos en el país durante 2019. Cada sector representa un municipio identificado por su código oficial, y el tamaño de la rebanada expone su peso relativo respecto al total acumulado de este grupo de baja frecuencia.
 * **Hallazgos Principales:** El análisis de la torta revela una distribución fragmentada donde un único nodo municipal (código 420) abarca la quinta parte del total del grupo con un 20%, seguido muy de cerca por dos sectores estables del 15% (códigos 705 y 884). El 50% restante se atomiza de forma equitativa en porciones menores de entre el 10% y el 5%. Estos insights interactivos son de alto valor epidemiológico, ya que permiten visibilizar los territorios con menor densidad de eventos fatales, sirviendo como línea base para investigar factores protectores de salud o posibles subregistros de información en zonas periféricas.
-<img width="1863" height="597" alt="image" src="https://github.com/user-attachments/assets/540c5c6f-1b37-48b5-bb4f-61b994ab2c88" />
+
+<img width="1866" height="581" alt="image" src="https://github.com/user-attachments/assets/677db0f4-2335-4894-87b1-b71ceceaeba0" />
+
 
 ### 5. Gráfico de barras: Principales 10 causas de muerte en Colombia (2019)
 
@@ -100,7 +103,8 @@ Para clonar este repositorio y ejecutar la aplicación de forma local en tu máq
 * **Descripción del Gráfico:** Se presenta un gráfico de barras horizontales que clasifica y compara los 10 municipios de Colombia con el mayor registro absoluto de decesos durante el año 2019. El eje vertical ($Y$) identifica los códigos de la División Político-Administrativa (Divipola) de cada municipio, ordenados de forma descendente, mientras que el eje horizontal ($X$) mide la frecuencia total de fallecimientos acumulados.
 * **Hallazgos Principales:** El análisis confirma una alta concentración espacial de la mortalidad en los principales centros urbanos y económicos del país. El nodo municipal correspondiente al código `11001` (Bogotá D.C.) encabeza la lista de manera masiva y aislada, superando los 35,000 registros. Detrás se ubican los códigos `05001` (Medellín) y `76001` (Cali), con frecuencias que oscilan entre los 15,000 y 18,000 casos. El resto de los municipios del top (como Barranquilla, Bucaramanga o Cúcuta) presentan un comportamiento homogéneo por debajo de los 10,000 decesos. Este comportamiento resalta cómo la escala demográfica de las capitales define el volumen global de la base de datos, justificando la inclusión de herramientas de normalización o tasas por cada 100,000 habitantes en fases avanzadas del tablero.
 * 
-<img width="1888" height="567" alt="image" src="https://github.com/user-attachments/assets/c5b49803-e020-4a0b-a53d-7438ef0a28d9" />
+<img width="1877" height="593" alt="image" src="https://github.com/user-attachments/assets/b64a3556-4c26-4fd5-8fbe-3c9ee8817086" />
+
 
 ### 7. Gráfico de barras: Distribución de la mortalidad por género (2019)
 
