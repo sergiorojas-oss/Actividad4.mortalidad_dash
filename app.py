@@ -14,7 +14,6 @@ ruta_geojson = "data/colombia.geojson"
 df_mortalidad = pd.read_excel(ruta_nofetal)
 
 # Cargamos los archivos secundarios de forma segura. 
-# Si el servidor no los encuentra o se queda sin RAM, no romperán la app.
 try:
     df_codigos = pd.read_excel(ruta_codigos)
 except Exception:
@@ -25,8 +24,42 @@ try:
 except Exception:
     df_divipola = pd.DataFrame()
 
+# Carga segura del GeoJSON para el Mapa 1
+try:
+    with open(ruta_geojson, "r", encoding="utf-8") as f:
+        colombia_geo = json.load(f)
+except Exception:
+    colombia_geo = None
 
-    
+# ---------- GRAFICO 1: MAPA ----------
+df_mapa = df_mortalidad.groupby("COD_DEPARTAMENTO").size().reset_index(name="total_muertes")
+
+# Convertimos el código a string y rellenamos con ceros a la izquierda por si acaso (ej: '5' -> '05')
+df_mapa["COD_DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].astype(str).str.zfill(2)
+
+if colombia_geo:
+    fig_mapa_geo = px.choropleth_mapbox(
+        df_mapa,
+        geojson=colombia_geo,
+        locations="COD_DEPARTAMENTO",
+        featureidkey="properties.DPTO",  # Vincula con el ID del GeoJSON de Colombia
+        color="total_muertes",
+        color_continuous_scale="Viridis",
+        mapbox_style="carto-positron",
+        zoom=3.5,
+        center={"lat": 4.570868, "lon": -74.297333},
+        opacity=0.5,
+        title="Distribución total de muertes por departamento (2019)"
+    )
+else:
+    # Si por alguna razón el GeoJSON falla, muestra un gráfico de barras de respaldo para no romper la app
+    fig_mapa_geo = px.bar(
+        df_mapa, 
+        x="COD_DEPARTAMENTO", 
+        y="total_muertes", 
+        title="Distribución total de muertes (Respaldo sin GeoJSON)"
+    )
+
 # ---------- GRAFICO 2: LÍNEAS ----------
 df_lineas = df_mortalidad.groupby("MES").size().reset_index(name="total_muertes")
 fig_lineas = px.line(
@@ -129,7 +162,7 @@ app.layout = html.Div(
         html.H4("Estudiante: Sergio Andrés Rojas Ordoñez",
                 style={"textAlign": "center", "marginBottom": "30px"}),
 
-        # 1. MAPA (Se eliminaron los asteriscos internos de los encabezados)
+        # 1. MAPA
         html.H2("1. Mapa: Distribución total de muertes por departamento (2019)",
                 style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_mapa_geo),
