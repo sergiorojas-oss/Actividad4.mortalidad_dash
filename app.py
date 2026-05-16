@@ -3,13 +3,12 @@ from dash import Dash, dcc, html
 import plotly.express as px
 import json
 import os
-import zipfile
+import urllib.request
 
 # ---------- CARGA DE DATOS ----------
 ruta_nofetal = "data/Anexo1.NoFetal2019_CE_15-03-23.xlsx"
 ruta_codigos = "data/Anexo2.CodigosDeMuerte_CE_15-03-23.xlsx"
 ruta_divipola = "data/Divipola_CE_.xlsx"
-ruta_zip_geojson = "data/colombia.geojson.zip"  # Tu archivo comprimido en la carpeta data
 
 # Cargamos el archivo principal de mortalidad
 df_mortalidad = pd.read_excel(ruta_nofetal)
@@ -25,22 +24,18 @@ try:
 except Exception:
     df_divipola = pd.DataFrame()
 
-# ---------- DESCOMPRESIÓN DEL GEOJSON DESDE EL ZIP ----------
+# ---------- GEOJSON DESDE URL (ESTABLE EN RAILWAY) ----------
 try:
-    # Abrimos el archivo .zip y extraemos el contenido del .geojson en memoria
-    with zipfile.ZipFile(ruta_zip_geojson, 'r') as z:
-        # Buscamos el nombre del archivo dentro del zip (por si se llama colombia.geojson)
-        nombre_archivo = z.namelist()[0]
-        with z.open(nombre_archivo) as f:
-            colombia_geo = json.loads(f.read().decode('utf-8'))
-except Exception as e:
-    print(f"Error al abrir el GeoJSON comprimido: {e}")
+    url_geo = "https://raw.githubusercontent.com/marcovega/colombia-json/master/colombia.json"
+    with urllib.request.urlopen(url_geo) as response:
+        colombia_geo = json.loads(response.read().decode("utf-8"))
+except Exception:
     colombia_geo = None
 
-# ---------- GRAFICO 1: MAPA ----------
+# ---------- GRAFICO 1: MAPA CORREGIDO ----------
 df_mapa = df_mortalidad.groupby("COD_DEPARTAMENTO").size().reset_index(name="total_muertes")
 
-# Limpieza estricta de códigos para asegurar coincidencia (ej: 5 -> "05")
+# Forzamos a que los códigos del Excel sean texto de 2 dígitos sin decimales (ej: 5 -> "05", 11 -> "11")
 df_mapa["COD_DEPARTAMENTO"] = pd.to_numeric(df_mapa["COD_DEPARTAMENTO"], errors="coerce").fillna(0).astype(int)
 df_mapa["COD_DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].astype(str).str.zfill(2)
 
@@ -49,9 +44,9 @@ if colombia_geo:
         df_mapa,
         geojson=colombia_geo,
         locations="COD_DEPARTAMENTO",
-        featureidkey="properties.DPTO",  # Volvemos a tu llave original del archivo pesado
+        featureidkey="properties.DPTO",  # CORRECCIÓN CLAVE: 'DPTO' en mayúsculas es la propiedad real de este JSON
         color="total_muertes",
-        color_continuous_scale="Reds",
+        color_continuous_scale="Reds",    # Escala de rojos para la intensidad de muertes
         mapbox_style="open-street-map",
         zoom=4.2,
         center={"lat": 4.570868, "lon": -74.297333},
@@ -60,7 +55,6 @@ if colombia_geo:
     )
     fig_mapa_geo.update_layout(margin={"r": 0, "t": 40, "l": 0, "b": 0})
 else:
-    # Gráfico de respaldo si el zip no se encuentra
     fig_mapa_geo = px.bar(
         df_mapa,
         x="COD_DEPARTAMENTO",
