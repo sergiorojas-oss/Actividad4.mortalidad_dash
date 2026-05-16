@@ -23,7 +23,6 @@ except Exception:
     df_divipola = pd.DataFrame()
 
 # ---------- DICCIONARIO SEGURO DE COORDENADAS POR DEPARTAMENTO ----------
-# Mapeo directo usando el COD_DEPARTAMENTO numérico exacto que viene en tu Anexo1
 coordenadas_colombia = {
     11: {"lat": 4.6097, "lon": -74.0817, "nombre": "Bogotá D.C."},
     5:  {"lat": 6.2442, "lon": -75.5812, "nombre": "Antioquia"},
@@ -79,9 +78,9 @@ fig_mapa_geo = px.scatter_mapbox(
     df_mapa,
     lat="lat",
     lon="lon",
-    size="total_muertes",           # El tamaño del círculo muestra el volumen de muertes
-    color="total_muertes",          # El color cambia de intensidad
-    color_continuous_scale="Reds",  # Gama de rojos como solicitas
+    size="total_muertes",
+    color="total_muertes",
+    color_continuous_scale="Reds",
     hover_name="DEPARTAMENTO",
     hover_data={"total_muertes": True, "lat": False, "lon": False},
     mapbox_style="open-street-map",
@@ -89,7 +88,7 @@ fig_mapa_geo = px.scatter_mapbox(
     center={"lat": 4.570868, "lon": -74.297333},
     title="Distribución Geográfica de la Mortalidad en Colombia (2019)"
 )
-fig_mapa_geo.update_layout(margin={"r":0,"t":40,"l":0,"b":0})
+fig_mapa_geo.update_layout(margin={"r": 0, "t": 40, "l": 0, "b": 0})
 
 # ---------- GRAFICO 2: LÍNEAS ----------
 df_lineas = df_mortalidad.groupby("MES").size().reset_index(name="total_muertes")
