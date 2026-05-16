@@ -24,7 +24,7 @@ try:
 except Exception:
     df_divipola = pd.DataFrame()
 
-# ---------- GEOJSON DESDE URL (ESTABLE EN RAILWAY) ----------
+# ---------- GEOJSON DESDE URL ----------
 try:
     url_geo = "https://raw.githubusercontent.com/marcovega/colombia-json/master/colombia.json"
     with urllib.request.urlopen(url_geo) as response:
@@ -32,21 +32,22 @@ try:
 except Exception:
     colombia_geo = None
 
-# ---------- GRAFICO 1: MAPA CORREGIDO ----------
+# ---------- GRAFICO 1: MAPA ----------
 df_mapa = df_mortalidad.groupby("COD_DEPARTAMENTO").size().reset_index(name="total_muertes")
 
-# Forzamos a que los códigos del Excel sean texto de 2 dígitos sin decimales (ej: 5 -> "05", 11 -> "11")
+# SOLUCIÓN CRUCIAL: Convertimos a número, luego a entero y finalmente a string SIN ceros a la izquierda (ej: 5 -> "5", 11 -> "11")
+# Esto es porque el GeoJSON de marcovega no usa formato de dos dígitos para los IDs de departamentos.
 df_mapa["COD_DEPARTAMENTO"] = pd.to_numeric(df_mapa["COD_DEPARTAMENTO"], errors="coerce").fillna(0).astype(int)
-df_mapa["COD_DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].astype(str).str.zfill(2)
+df_mapa["COD_DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].astype(str)
 
 if colombia_geo:
     fig_mapa_geo = px.choropleth_mapbox(
         df_mapa,
         geojson=colombia_geo,
         locations="COD_DEPARTAMENTO",
-        featureidkey="properties.DPTO",  # CORRECCIÓN CLAVE: 'DPTO' en mayúsculas es la propiedad real de este JSON
+        featureidkey="properties.DPTO",  # Llave correcta en mayúsculas de este archivo JSON
         color="total_muertes",
-        color_continuous_scale="Reds",    # Escala de rojos para la intensidad de muertes
+        color_continuous_scale="Reds",    # Escala de rojos para la intensidad
         mapbox_style="open-street-map",
         zoom=4.2,
         center={"lat": 4.570868, "lon": -74.297333},
