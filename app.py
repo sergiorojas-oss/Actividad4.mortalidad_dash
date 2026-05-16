@@ -14,15 +14,38 @@ df_mortalidad = pd.read_excel(ruta_nofetal)
 # Archivos secundarios limpios con try/except
 try:
     df_codigos = pd.read_excel(ruta_codigos)
+    if not df_codigos.empty and "CÓDIGO" in df_codigos.columns:
+        df_codigos = df_codigos.rename(columns={"CÓDIGO": "COD_MUERTE"})
 except Exception:
     df_codigos = pd.DataFrame()
 
 try:
     df_divipola = pd.read_excel(ruta_divipola)
+    if not df_divipola.empty:
+        # Forzamos los nombres de las columnas a mayúsculas para buscar
+        df_divipola.columns = [str(c).upper().strip() for c in df_divipola.columns]
+        
+        # Buscamos de forma ultra-flexible las columnas
+        col_cod = [c for c in df_divipola.columns if "COD" in c or "MUN" in c]
+        col_nom = [c for c in df_divipola.columns if "NOM" in c or "MUN" in c or "TEXT" in c]
+        
+        if col_cod and col_nom:
+            df_divipola["KEY_MUNICIPIO"] = pd.to_numeric(df_divipola[col_cod[0]], errors='coerce').fillna(0).astype(int)
+            df_divipola["NOM_MUNICIPIO"] = df_divipola[col_nom[-1]].astype(str).str.upper()
 except Exception:
     df_divipola = pd.DataFrame()
 
-# ---------- DICCIONARIO SEGURO DE COORDENADAS POR DEPARTAMENTO ----------
+# ---------- DICCIONARIO DE RESPALDO ULTRA-SEGURO (Mapeo Directo) ----------
+# Si el Excel de Divipola falla, este diccionario traduce directamente los códigos de tus capturas
+diccionario_municipios = {
+    76001: "CALI", 11001: "BOGOTÁ D.C.", 5001: "MEDELLÍN", 
+    8001: "BARRANQUILLA", 54001: "CÚCUTA",
+    97666: "TARAIRA", 52390: "LA TOLA", 50245: "EL CALVARIO", 
+    27495: "NÓVITA", 68344: "HATO", 13650: "SAN FERNANDO", 
+    27025: "ALTO BAUDÓ", 13440: "MARGARITA", 91263: "EL ENCANTO", 
+    94663: "MAPIRIPANA"
+}
+
 coordenadas_colombia = {
     11: {"lat": 4.6097, "lon": -74.0817, "nombre": "Bogotá D.C."},
     5:  {"lat": 6.2442, "lon": -75.5812, "nombre": "Antioquia"},
@@ -59,121 +82,94 @@ coordenadas_colombia = {
     99: {"lat": 6.1857, "lon": -67.4856, "nombre": "Vichada"}
 }
 
-# ---------- GRAFICO 1: MAPA DE DENSIDAD (SCATTER MAPBOX) ----------
+# Reconstrucción matemática exacta del código de 5 dígitos (DPTO * 1000 + MUN)
+df_mortalidad["INT_DPTO"] = pd.to_numeric(df_mortalidad["COD_DEPARTAMENTO"], errors='coerce').fillna(0).astype(int)
+df_mortalidad["INT_MUN"] = pd.to_numeric(df_mortalidad["COD_MUNICIPIO"], errors='coerce').fillna(0).astype(int)
+df_mortalidad["KEY_MUNICIPIO"] = (df_mortalidad["INT_DPTO"] * 1000) + df_mortalidad["INT_MUN"]
+df_mortalidad["COD_DEPARTAMENTO"] = df_mortalidad["INT_DPTO"]
+
+# ---------- GRAFICO 1: MAPA DE DENSIDAD ----------
 df_mapa = df_mortalidad.groupby("COD_DEPARTAMENTO").size().reset_index(name="total_muertes")
-
-# Limpieza numérica estándar
-df_mapa["COD_DEPARTAMENTO"] = pd.to_numeric(df_mapa["COD_DEPARTAMENTO"], errors='coerce').fillna(0).astype(int)
-
-# Cruzamos las coordenadas usando el diccionario
 df_mapa["lat"] = df_mapa["COD_DEPARTAMENTO"].map(lambda x: coordenadas_colombia.get(x, {}).get("lat", None))
 df_mapa["lon"] = df_mapa["COD_DEPARTAMENTO"].map(lambda x: coordenadas_colombia.get(x, {}).get("lon", None))
 df_mapa["DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].map(lambda x: coordenadas_colombia.get(x, {}).get("nombre", "Desconocido"))
-
-# Quitamos filas que no tengan coordenadas válidas
 df_mapa = df_mapa.dropna(subset=["lat", "lon"])
 
-# Generamos el mapa interactivo de burbujas rojas
 fig_mapa_geo = px.scatter_mapbox(
-    df_mapa,
-    lat="lat",
-    lon="lon",
-    size="total_muertes",
-    color="total_muertes",
-    color_continuous_scale="Reds",
-    hover_name="DEPARTAMENTO",
+    df_mapa, lat="lat", lon="lon", size="total_muertes", color="total_muertes",
+    color_continuous_scale="Reds", hover_name="DEPARTAMENTO",
     hover_data={"total_muertes": True, "lat": False, "lon": False},
-    mapbox_style="open-street-map",
-    zoom=4.4,
-    center={"lat": 4.570868, "lon": -74.297333},
+    mapbox_style="open-street-map", zoom=4.4, center={"lat": 4.570868, "lon": -74.297333},
     title="Distribución Geográfica de la Mortalidad en Colombia (2019)"
 )
 fig_mapa_geo.update_layout(margin={"r": 0, "t": 40, "l": 0, "b": 0})
 
 # ---------- GRAFICO 2: LÍNEAS ----------
 df_lineas = df_mortalidad.groupby("MES").size().reset_index(name="total_muertes")
-fig_lineas = px.line(
-    df_lineas,
-    x="MES",
-    y="total_muertes",
-    markers=True,
-    title="Total de muertes por mes (2019)",
-)
+fig_lineas = px.line(df_lineas, x="MES", y="total_muertes", markers=True, title="Total de muertes por mes (2019)")
 
 # ---------- GRAFICO 3: HOMICIDIOS ----------
 df_homicidios = df_mortalidad[df_mortalidad["MANERA_MUERTE"] == "Homicidio"]
-df_violencia = (
-    df_homicidios.groupby("COD_MUNICIPIO")
-    .size()
-    .reset_index(name="total_homicidios")
-    .sort_values("total_homicidios", ascending=False)
-    .head(5)
-)
+df_violencia = df_homicidios.groupby("KEY_MUNICIPIO").size().reset_index(name="total_homicidios")
+
+# Intentar cruce con DIVIPOLA; si falla, usar el diccionario de respaldo seguro
+if not df_divipola.empty and "NOM_MUNICIPIO" in df_divipola.columns:
+    df_violencia = pd.merge(df_violencia, df_divipola[["KEY_MUNICIPIO", "NOM_MUNICIPIO"]].drop_duplicates(subset=["KEY_MUNICIPIO"]), on="KEY_MUNICIPIO", how="left")
+    df_violencia["MUNICIPIO"] = df_violencia["NOM_MUNICIPIO"].fillna(df_violencia["KEY_MUNICIPIO"].map(diccionario_municipios))
+else:
+    df_violencia["MUNICIPIO"] = df_violencia["KEY_MUNICIPIO"].map(diccionario_municipios)
+
+# Si algún código raro queda vacío, muestra el código
+df_violencia["MUNICIPIO"] = df_violencia["MUNICIPIO"].fillna(df_violencia["KEY_MUNICIPIO"].astype(str))
+df_violencia = df_violencia.sort_values("total_homicidios", ascending=False).head(5)
+
 fig_violencia = px.bar(
-    df_violencia,
-    x="COD_MUNICIPIO",
-    y="total_homicidios",
+    df_violencia, x="MUNICIPIO", y="total_homicidios",
     title="Top 5 ciudades más violentas (Homicidios)",
+    labels={"MUNICIPIO": "Municipio", "total_homicidios": "Total Homicidios"}
 )
 
-# ---------- GRAFICO 4: CIRCULAR ----------
-df_municipios = (
-    df_mortalidad.groupby("COD_MUNICIPIO")
-    .size()
-    .reset_index(name="total_muertes")
-    .sort_values("total_muertes")
-    .head(10)
-)
-fig_menor_mortalidad = px.pie(
-    df_municipios,
-    names="COD_MUNICIPIO",
-    values="total_muertes",
-    title="10 ciudades con menor mortalidad (2019)",
-)
+# ---------- GRAFICO 4: CIRCULAR (TORTA) ----------
+df_municipios = df_mortalidad.groupby("KEY_MUNICIPIO").size().reset_index(name="total_muertes")
+
+if not df_divipola.empty and "NOM_MUNICIPIO" in df_divipola.columns:
+    df_municipios = pd.merge(df_municipios, df_divipola[["KEY_MUNICIPIO", "NOM_MUNICIPIO"]].drop_duplicates(subset=["KEY_MUNICIPIO"]), on="KEY_MUNICIPIO", how="left")
+    df_municipios["MUNICIPIO"] = df_municipios["NOM_MUNICIPIO"].fillna(df_municipios["KEY_MUNICIPIO"].map(diccionario_municipios))
+else:
+    df_municipios["MUNICIPIO"] = df_municipios["KEY_MUNICIPIO"].map(diccionario_municipios)
+
+df_municipios["MUNICIPIO"] = df_municipios["MUNICIPIO"].fillna(df_municipios["KEY_MUNICIPIO"].astype(str))
+df_municipios = df_municipios.sort_values("total_muertes").head(10)
+
+fig_menor_mortalidad = px.pie(df_municipios, names="MUNICIPIO", values="total_muertes", title="10 ciudades con menor mortalidad (2019)")
 
 # ---------- GRAFICO 5: TABLA DE CAUSAS ----------
-df_causas = (
-    df_mortalidad.groupby("COD_MUERTE")
-    .size()
-    .reset_index(name="total_muertes")
-    .sort_values("total_muertes", ascending=False)
-    .head(10)
-)
-fig_causas = px.bar(
-    df_causas,
-    x="COD_MUERTE",
-    y="total_muertes",
-    title="Top 10 causas de muerte (2019)",
-)
+df_causas = df_mortalidad.groupby("COD_MUERTE").size().reset_index(name="total_muertes")
+if not df_codigos.empty and "COD_MUERTE" in df_codigos.columns:
+    col_desc = [c for c in df_codigos.columns if "DESCR" in c.upper() or "NOM" in c.upper()]
+    if col_desc:
+        df_causas = pd.merge(df_causas, df_codigos[["COD_MUERTE", col_desc[0]]], on="COD_MUERTE", how="left")
+        df_causas["CAUSA"] = df_causas[col_desc[0]].fillna(df_causas["COD_MUERTE"])
+    else:
+        df_causas["CAUSA"] = df_causas["COD_MUERTE"]
+else:
+    df_causas["CAUSA"] = df_causas["COD_MUERTE"]
+df_causas = df_causas.sort_values("total_muertes", ascending=False).head(10)
+
+fig_causas = px.bar(df_causas, x="CAUSA", y="total_muertes", title="Top 10 causas de muerte (2019)", labels={"CAUSA": "Causa de muerte", "total_muertes": "Total Muertes"})
 
 # ---------- GRAFICO 6: SEXO ----------
-df_sexo = (
-    df_mortalidad.groupby(["COD_DEPARTAMENTO", "SEXO"])
-    .size()
-    .reset_index(name="total_muertes")
-)
+df_sexo = df_mortalidad.groupby(["COD_DEPARTAMENTO", "SEXO"]).size().reset_index(name="total_muertes")
+df_sexo["DEPARTAMENTO"] = df_sexo["COD_DEPARTAMENTO"].map(lambda x: coordenadas_colombia.get(x, {}).get("nombre", f"Código {x}"))
+
 fig_sexo = px.bar(
-    df_sexo,
-    x="COD_DEPARTAMENTO",
-    y="total_muertes",
-    color="SEXO",
-    barmode="stack",
-    title="Muertes por departamento según sexo",
+    df_sexo, x="DEPARTAMENTO", y="total_muertes", color="SEXO", barmode="stack",
+    title="Muertes por departamento según sexo", labels={"DEPARTAMENTO": "Departamento", "total_muertes": "Total Muertes"}
 )
 
 # ---------- GRAFICO 7: HISTOGRAMA EDADES ----------
-df_edades = (
-    df_mortalidad.groupby("GRUPO_EDAD1")
-    .size()
-    .reset_index(name="total_muertes")
-    .sort_values("GRUPO_EDAD1")
-)
-fig_edades = px.bar(
-    df_edades,
-    x="GRUPO_EDAD1",
-    y="total_muertes",
-    title="Distribución de muertes por grupos de edad (2019)",
-)
+df_edades = df_mortalidad.groupby("GRUPO_EDAD1").size().reset_index(name="total_muertes").sort_values("GRUPO_EDAD1")
+fig_edades = px.bar(df_edades, x="GRUPO_EDAD1", y="total_muertes", title="Distribución de muertes por grupos de edad (2019)")
 
 # ---------- APP ----------
 app = Dash(__name__)
@@ -182,70 +178,33 @@ server = app.server
 app.layout = html.Div(
     style={"margin": "20px"},
     children=[
-        html.H1(
-            "Actividad 4 – Análisis de Mortalidad en Colombia (2019)",
-            style={"textAlign": "center", "fontWeight": "bold"},
-        ),
-        html.H3(
-            "Maestría en Inteligencia Artificial – Universidad de La Salle",
-            style={"textAlign": "center"},
-        ),
-        html.H4(
-            "Estudiante: Sergio Andrés Rojas Ordoñez",
-            style={"textAlign": "center", "marginBottom": "30px"},
-        ),
+        html.H1("Actividad 4 – Análisis de Mortalidad en Colombia (2019)", style={"textAlign": "center", "fontWeight": "bold"}),
+        html.H3("Maestría en Inteligencia Artificial – Universidad de La Salle", style={"textAlign": "center"}),
+        html.H4("Estudiante: Sergio Andrés Rojas Ordoñez", style={"textAlign": "center", "marginBottom": "30px"}),
 
-        # 1. MAPA
-        html.H2(
-            "1. Mapa: Distribución total de muertes por departamento (2019)",
-            style={"fontWeight": "bold"},
-        ),
+        html.H2("1. Mapa: Distribución total de muertes por departamento (2019)", style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_mapa_geo),
 
-        # 2. LÍNEAS
-        html.H2(
-            "2. Gráfico de líneas: Total de muertes por mes (2019)",
-            style={"fontWeight": "bold"},
-        ),
+        html.H2("2. Gráfico de líneas: Total de muertes por mes (2019)", style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_lineas),
 
-        # 3. VIOLENCIA
-        html.H2(
-            "3. Gráfico de barras: 5 ciudades más violentas (Homicidios)",
-            style={"fontWeight": "bold"},
-        ),
+        html.H2("3. Gráfico de barras: 5 ciudades más violentas (Homicidios)", style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_violencia),
 
-        # 4. CIRCULAR
-        html.H2(
-            "4. Gráfico circular: 10 ciudades con menor mortalidad (2019)",
-            style={"fontWeight": "bold"},
-        ),
+        html.H2("4. Gráfico circular: 10 ciudades con menor mortalidad (2019)", style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_menor_mortalidad),
 
-        # 5. TABLA DE CAUSAS
-        html.H2(
-            "5. Tabla: Principales 10 causas de muerte en Colombia (2019)",
-            style={"fontWeight": "bold"},
-        ),
+        html.H2("5. Tabla: Principales 10 causas de muerte en Colombia (2019)", style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_causas),
 
-        # 6. SEXO
-        html.H2(
-            "6. Gráfico de barras apiladas: Muertes por sexo y departamento",
-            style={"fontWeight": "bold"},
-        ),
+        html.H2("6. Gráfico de barras apiladas: Muertes por sexo y departamento", style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_sexo),
 
-        # 7. HISTOGRAMA
-        html.H2(
-            "7. Histograma: Distribución de muertes por grupos de edad (GRUPO_EDAD1)",
-            style={"fontWeight": "bold"},
-        ),
+        html.H2("7. Histograma: Distribución de muertes por grupos de edad (GRUPO_EDAD1)", style={"fontWeight": "bold"}),
         dcc.Graph(figure=fig_edades),
     ],
 )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="127.0.0.1", port=port, debug=True)
