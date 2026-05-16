@@ -8,10 +8,8 @@ ruta_nofetal = "data/Anexo1.NoFetal2019_CE_15-03-23.xlsx"
 ruta_codigos = "data/Anexo2.CodigosDeMuerte_CE_15-03-23.xlsx"
 ruta_divipola = "data/Divipola_CE_.xlsx"
 
-# Cargamos el archivo principal de mortalidad
 df_mortalidad = pd.read_excel(ruta_nofetal)
 
-# Archivos secundarios limpios con try/except
 try:
     df_codigos = pd.read_excel(ruta_codigos)
 except Exception:
@@ -23,7 +21,6 @@ except Exception:
     df_divipola = pd.DataFrame()
 
 # ---------- DICCIONARIO SEGURO DE COORDENADAS POR DEPARTAMENTO ----------
-# Mapeo directo usando el COD_DEPARTAMENTO numérico exacto que viene en tu Anexo1
 coordenadas_colombia = {
     11: {"lat": 4.6097, "lon": -74.0817, "nombre": "Bogotá D.C."},
     5:  {"lat": 6.2442, "lon": -75.5812, "nombre": "Antioquia"},
@@ -60,191 +57,182 @@ coordenadas_colombia = {
     99: {"lat": 6.1857, "lon": -67.4856, "nombre": "Vichada"}
 }
 
-# ---------- GRAFICO 1: MAPA DE DENSIDAD (SCATTER MAPBOX) ----------
+# ---------- PALETA CORPORATIVA ----------
+COLOR_FONDO = "#F1F5F9"
+COLOR_TEXTO = "#0F172A"
+COLOR_SUBTITULO = "#334155"
+COLOR_TARJETA = "#FFFFFF"
+COLOR_BORDE = "#E2E8F0"
+
+# ---------- ESTILOS CORPORATIVOS ----------
+estilo_tarjeta = {
+    "backgroundColor": COLOR_TARJETA,
+    "borderRadius": "12px",
+    "boxShadow": "0 2px 8px rgba(0,0,0,0.06)",
+    "padding": "28px",
+    "marginBottom": "28px",
+    "border": f"1px solid {COLOR_BORDE}"
+}
+
+estilo_titulo_grafico = {
+    "fontSize": "18px",
+    "color": COLOR_TEXTO,
+    "fontWeight": "600",
+    "marginBottom": "18px",
+    "fontFamily": "Segoe UI, sans-serif"
+}
+
+estilo_subtitulo = {
+    "fontSize": "14px",
+    "color": COLOR_SUBTITULO,
+    "fontWeight": "400",
+    "marginTop": "4px",
+    "fontFamily": "Segoe UI, sans-serif"
+}
+
+estilo_encabezado = {
+    "textAlign": "center",
+    "marginBottom": "40px",
+    "paddingBottom": "25px",
+    "borderBottom": f"2px solid {COLOR_BORDE}"
+}
+
+# ---------- GENERACIÓN DE GRÁFICOS ----------
+
+# 1. MAPA
 df_mapa = df_mortalidad.groupby("COD_DEPARTAMENTO").size().reset_index(name="total_muertes")
-
-# Limpieza numérica estándar
 df_mapa["COD_DEPARTAMENTO"] = pd.to_numeric(df_mapa["COD_DEPARTAMENTO"], errors='coerce').fillna(0).astype(int)
-
-# Cruzamos las coordenadas usando el diccionario
 df_mapa["lat"] = df_mapa["COD_DEPARTAMENTO"].map(lambda x: coordenadas_colombia.get(x, {}).get("lat", None))
 df_mapa["lon"] = df_mapa["COD_DEPARTAMENTO"].map(lambda x: coordenadas_colombia.get(x, {}).get("lon", None))
 df_mapa["DEPARTAMENTO"] = df_mapa["COD_DEPARTAMENTO"].map(lambda x: coordenadas_colombia.get(x, {}).get("nombre", "Desconocido"))
-
-# Quitamos filas que no tengan coordenadas válidas
 df_mapa = df_mapa.dropna(subset=["lat", "lon"])
 
-# Generamos el mapa interactivo de burbujas rojas
 fig_mapa_geo = px.scatter_mapbox(
-    df_mapa,
-    lat="lat",
-    lon="lon",
-    size="total_muertes",           # El tamaño del círculo muestra el volumen de muertes
-    color="total_muertes",          # El color cambia de intensidad
-    color_continuous_scale="Reds",  # Gama de rojos como solicitas
-    hover_name="DEPARTAMENTO",
+    df_mapa, lat="lat", lon="lon", size="total_muertes", color="total_muertes",
+    color_continuous_scale="Reds", hover_name="DEPARTAMENTO",
     hover_data={"total_muertes": True, "lat": False, "lon": False},
-    mapbox_style="open-street-map",
-    zoom=4.4,
-    center={"lat": 4.570868, "lon": -74.297333},
-    title="Distribución Geográfica de la Mortalidad en Colombia (2019)"
+    mapbox_style="open-street-map", zoom=4.3, center={"lat": 4.570868, "lon": -74.297333}
 )
-fig_mapa_geo.update_layout(margin={"r":0,"t":40,"l":0,"b":0})
+fig_mapa_geo.update_layout(template="plotly_white", margin={"r":0,"t":10,"l":0,"b":0})
 
-# ---------- GRAFICO 2: LÍNEAS ----------
+# 2. LÍNEAS
 df_lineas = df_mortalidad.groupby("MES").size().reset_index(name="total_muertes")
 fig_lineas = px.line(
-    df_lineas,
-    x="MES",
-    y="total_muertes",
-    markers=True,
-    title="Total de muertes por mes (2019)",
+    df_lineas, x="MES", y="total_muertes", markers=True,
+    labels={"MES": "Mes", "total_muertes": "Casos"},
+    color_discrete_sequence=["#2563EB"]
 )
+fig_lineas.update_layout(template="plotly_white", margin={"t":20,"b":20})
 
-# ---------- GRAFICO 3: HOMICIDIOS ----------
+# 3. HOMICIDIOS
 df_homicidios = df_mortalidad[df_mortalidad["MANERA_MUERTE"] == "Homicidio"]
-df_violencia = (
-    df_homicidios.groupby("COD_MUNICIPIO")
-    .size()
-    .reset_index(name="total_homicidios")
-    .sort_values("total_homicidios", ascending=False)
-    .head(5)
-)
+df_violencia = df_homicidios.groupby("COD_MUNICIPIO").size().reset_index(name="total_homicidios").sort_values("total_homicidios", ascending=False).head(5)
 fig_violencia = px.bar(
-    df_violencia,
-    x="COD_MUNICIPIO",
-    y="total_homicidios",
-    title="Top 5 ciudades más violentas (Homicidios)",
+    df_violencia, x="COD_MUNICIPIO", y="total_homicidios",
+    labels={"COD_MUNICIPIO": "Municipio", "total_homicidios": "Casos"},
+    color_discrete_sequence=["#0F172A"]
 )
+fig_violencia.update_layout(template="plotly_white", margin={"t":20,"b":20})
 
-# ---------- GRAFICO 4: CIRCULAR ----------
-df_municipios = (
-    df_mortalidad.groupby("COD_MUNICIPIO")
-    .size()
-    .reset_index(name="total_muertes")
-    .sort_values("total_muertes")
-    .head(10)
-)
+# 4. CIRCULAR
+df_municipios = df_mortalidad.groupby("COD_MUNICIPIO").size().reset_index(name="total_muertes").sort_values("total_muertes").head(10)
 fig_menor_mortalidad = px.pie(
-    df_municipios,
-    names="COD_MUNICIPIO",
-    values="total_muertes",
-    title="10 ciudades con menor mortalidad (2019)",
+    df_municipios, names="COD_MUNICIPIO", values="total_muertes",
+    color_discrete_sequence=px.colors.sequential.Slate
 )
+fig_menor_mortalidad.update_layout(template="plotly_white", margin={"t":20,"b":20})
 
-# ---------- GRAFICO 5: TABLA DE CAUSAS ----------
-df_causas = (
-    df_mortalidad.groupby("COD_MUERTE")
-    .size()
-    .reset_index(name="total_muertes")
-    .sort_values("total_muertes", ascending=False)
-    .head(10)
-)
+# 5. TABLA DE CAUSAS
+df_causas = df_mortalidad.groupby("COD_MUERTE").size().reset_index(name="total_muertes").sort_values("total_muertes", ascending=False).head(10)
 fig_causas = px.bar(
-    df_causas,
-    x="COD_MUERTE",
-    y="total_muertes",
-    title="Top 10 causas de muerte (2019)",
+    df_causas, x="COD_MUERTE", y="total_muertes",
+    labels={"COD_MUERTE": "Causa", "total_muertes": "Casos"},
+    color_discrete_sequence=["#DC2626"]
 )
+fig_causas.update_layout(template="plotly_white", margin={"t":20,"b":20})
 
-# ---------- GRAFICO 6: SEXO ----------
-df_sexo = (
-    df_mortalidad.groupby(["COD_DEPARTAMENTO", "SEXO"])
-    .size()
-    .reset_index(name="total_muertes")
-)
+# 6. SEXO
+df_sexo = df_mortalidad.groupby(["COD_DEPARTAMENTO", "SEXO"]).size().reset_index(name="total_muertes")
 fig_sexo = px.bar(
-    df_sexo,
-    x="COD_DEPARTAMENTO",
-    y="total_muertes",
-    color="SEXO",
-    barmode="stack",
-    title="Muertes por departamento según sexo",
+    df_sexo, x="COD_DEPARTAMENTO", y="total_muertes", color="SEXO", barmode="stack",
+    color_discrete_map={"Masculino": "#1e3a8a", "Femenino": "#ec4899", "Indeterminado": "#94a3b8"},
+    labels={"COD_DEPARTAMENTO": "Departamento", "total_muertes": "Casos"}
 )
+fig_sexo.update_layout(template="plotly_white", margin={"t":20,"b":20})
 
-# ---------- GRAFICO 7: HISTOGRAMA EDADES ----------
-df_edades = (
-    df_mortalidad.groupby("GRUPO_EDAD1")
-    .size()
-    .reset_index(name="total_muertes")
-    .sort_values("GRUPO_EDAD1")
-)
+# 7. HISTOGRAMA EDADES
+df_edades = df_mortalidad.groupby("GRUPO_EDAD1").size().reset_index(name="total_muertes").sort_values("GRUPO_EDAD1")
 fig_edades = px.bar(
-    df_edades,
-    x="GRUPO_EDAD1",
-    y="total_muertes",
-    title="Distribución de muertes por grupos de edad (2019)",
+    df_edades, x="GRUPO_EDAD1", y="total_muertes",
+    labels={"GRUPO_EDAD1": "Grupo de Edad", "total_muertes": "Casos"},
+    color_discrete_sequence=["#475569"]
 )
+fig_edades.update_layout(template="plotly_white", margin={"t":20,"b":20})
 
-# ---------- APP ----------
+# ---------- UI CORPORATIVA ----------
 app = Dash(__name__)
 server = app.server
 
 app.layout = html.Div(
-    style={"margin": "20px"},
+    style={"backgroundColor": COLOR_FONDO, "fontFamily": "Segoe UI, sans-serif", "padding": "40px 20px"},
     children=[
-        html.H1(
-            "Actividad 4 – Análisis de Mortalidad en Colombia (2019)",
-            style={"textAlign": "center", "fontWeight": "bold"},
-        ),
-        html.H3(
-            "Maestría en Inteligencia Artificial – Universidad de La Salle",
-            style={"textAlign": "center"},
-        ),
-        html.H4(
-            "Estudiante: Sergio Andrés Rojas Ordoñez",
-            style={"textAlign": "center", "marginBottom": "30px"},
+
+        # ENCABEZADO CORPORATIVO
+        html.Div(
+            style=estilo_encabezado,
+            children=[
+                html.H1("Actividad 4 – Análisis de Mortalidad en Colombia (2019)",
+                        style={"color": COLOR_TEXTO, "fontWeight": "700", "fontSize": "34px", "margin": "0"}),
+                html.Div("Maestría en Inteligencia Artificial – Universidad de La Salle",
+                         style=estilo_subtitulo),
+                html.Div("Estudiante: Sergio Andrés Rojas Ordoñez",
+                         style=estilo_subtitulo)
+            ]
         ),
 
-        # 1. MAPA
-        html.H2(
-            "1. Mapa: Distribución total de muertes por departamento (2019)",
-            style={"fontWeight": "bold"},
-        ),
-        dcc.Graph(figure=fig_mapa_geo),
+        # MAPA
+        html.Div(style=estilo_tarjeta, children=[
+            html.Div("1. Distribución Geográfica de la Mortalidad en Colombia (2019)", style=estilo_titulo_grafico),
+            dcc.Graph(figure=fig_mapa_geo, style={"height": "480px"})
+        ]),
 
-        # 2. LÍNEAS
-        html.H2(
-            "2. Gráfico de líneas: Total de muertes por mes (2019)",
-            style={"fontWeight": "bold"},
-        ),
-        dcc.Graph(figure=fig_lineas),
+        # REJILLA DE 2 COLUMNAS
+        html.Div(
+            style={"display": "grid", "gridTemplateColumns": "repeat(auto-fit, minmax(48%, 1fr))", "gap": "24px"},
+            children=[
 
-        # 3. VIOLENCIA
-        html.H2(
-            "3. Gráfico de barras: 5 ciudades más violentas (Homicidios)",
-            style={"fontWeight": "bold"},
-        ),
-        dcc.Graph(figure=fig_violencia),
+                html.Div(style=estilo_tarjeta, children=[
+                    html.Div("2. Total de muertes por mes (2019)", style=estilo_titulo_grafico),
+                    dcc.Graph(figure=fig_lineas)
+                ]),
 
-        # 4. CIRCULAR
-        html.H2(
-            "4. Gráfico circular: 10 ciudades con menor mortalidad (2019)",
-            style={"fontWeight": "bold"},
-        ),
-        dcc.Graph(figure=fig_menor_mortalidad),
+                html.Div(style=estilo_tarjeta, children=[
+                    html.Div("3. Top 5 ciudades más violentas (Homicidios)", style=estilo_titulo_grafico),
+                    dcc.Graph(figure=fig_violencia)
+                ]),
 
-        # 5. TABLA DE CAUSAS
-        html.H2(
-            "5. Tabla: Principales 10 causas de muerte en Colombia (2019)",
-            style={"fontWeight": "bold"},
-        ),
-        dcc.Graph(figure=fig_causas),
+                html.Div(style=estilo_tarjeta, children=[
+                    html.Div("4. 10 ciudades con menor mortalidad (2019)", style=estilo_titulo_grafico),
+                    dcc.Graph(figure=fig_menor_mortalidad)
+                ]),
 
-        # 6. SEXO
-        html.H2(
-            "6. Gráfico de barras apiladas: Muertes por sexo y departamento",
-            style={"fontWeight": "bold"},
-        ),
-        dcc.Graph(figure=fig_sexo),
+                html.Div(style=estilo_tarjeta, children=[
+                    html.Div("5. Top 10 causas de muerte en Colombia (2019)", style=estilo_titulo_grafico),
+                    dcc.Graph(figure=fig_causas)
+                ]),
 
-        # 7. HISTOGRAMA
-        html.H2(
-            "7. Histograma: Distribución de muertes por grupos de edad (GRUPO_EDAD1)",
-            style={"fontWeight": "bold"},
-        ),
-        dcc.Graph(figure=fig_edades),
-    ],
+                html.Div(style=estilo_tarjeta, children=[
+                    html.Div("6. Muertes por sexo y departamento", style=estilo_titulo_grafico),
+                    dcc.Graph(figure=fig_sexo)
+                ]),
+
+                html.Div(style=estilo_tarjeta, children=[
+                    html.Div("7. Distribución de muertes por grupos de edad (GRUPO_EDAD1)", style=estilo_titulo_grafico),
+                    dcc.Graph(figure=fig_edades)
+                ]),
+            ]
+        )
+    ]
 )
 
 if __name__ == "__main__":
